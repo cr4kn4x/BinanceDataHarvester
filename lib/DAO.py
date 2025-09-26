@@ -1,4 +1,5 @@
 import logging, pymongo, typing
+from pymongo.errors import DuplicateKeyError, BulkWriteError
 from lib.DatetimeCursor import Cursor
 from lib.DataStructures import OHLCV
 from lib.utils import get_binance_spot_start_cursor, timestamp_to_cursor
@@ -55,38 +56,33 @@ class DAO:
         return cursor, is_initial_binance_cursor
 
 
-
-    def insert_kline(self, database_name: str, collection_name: str, kline: OHLCV, allow_overwrite: bool = False): 
-        collection = self._get_collection(database_name=database_name, collection_name=collection_name)
+    def insert_klines_error_resistant(self, database_name: str, collection_name: str, klines: typing.List[OHLCV]):
+        try: 
+            return self.insert_klines(database_name=database_name, collection_name=collection_name, klines=klines)
         
-        # dump kline
-        kline = kline.model_dump(mode="python")
-
-        if allow_overwrite: 
-            insertion_result = collection.update_one(filter={"open_time": kline["open_time"]}, update={"$set": kline}, upsert=True)
-        else:
-            insertion_result = collection.insert_one(kline.model_dump(mode="python"))
-
-        return insertion_result
-    
+        except DuplicateKeyError as e: 
+            logging.warning(f"database write attempt raised DuplicateKeyError: {e}")
+            logging.warning("retry to insert data using the DuplicateKeyError tolerant update and upsert logic...")
+            
+            return self.insert_klines(database_name=database_name, collection_name=collection_name, klines=klines, allow_overwrite=True)
+        except BulkWriteError as e:
+            logging.warning(f"database write attempt raised BulkWriteError: {e.details}")
+            logging.warning("retry to insert data using the DuplicateKeyError tolerant update and upsert logic...")
+            
+            return self.insert_klines(database_name=database_name, collection_name=collection_name, klines=klines, allow_overwrite=True)
+        
 
     def insert_klines(self, database_name: str, collection_name: str, klines: typing.List[OHLCV], allow_overwrite: bool = False): 
         collection = self._get_collection(database_name=database_name, collection_name=collection_name)
         
+        logging.info(f"attempting to bulk write (allow_overwrite={allow_overwrite}) total {len(klines)} klines in database {database_name} collection {collection_name}...")        
+        
         # dump klines
         klines = [k.model_dump(mode="python") for k in klines]
-
+        
         if allow_overwrite:
-            try:
-                insertion_result = collection.insert_many(klines, ordered=True)
-                return insertion_result
-            except Exception as e: 
-                pass # we just take this...
-            
-            # now really allow override... it takes way longer than insert_many...
-            ops = [pymongo.UpdateOne(filter={"open_time": k["open_time"]}, update={"$set": k}, upsert=True) for k in klines]
+            ops = [pymongo.UpdateOne({"open_time": k["open_time"]}, {"$set": k}, upsert=True) for k in klines]
             return collection.bulk_write(ops, ordered=True)
-        else:
-            return collection.insert_many(klines, ordered=True)
 
-        return
+        else: 
+            return collection.insert_many(klines, ordered=True)
