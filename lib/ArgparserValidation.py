@@ -43,6 +43,10 @@ def check_env_config(path: str):
         config = EnvConfiguration(**config)
     except Exception as e:
         raise argparse.ArgumentTypeError(f"Invalid configuration file {path}: {e}")
+    
+    #
+    if not os.path.exists(config.BASE_DIR):
+        raise argparse.ArgumentTypeError(f"The base directory {config.BASE_DIR} provided in the environment file {path} does not exists. Please create the directory {config.BASE_DIR}")
 
     return config
 
