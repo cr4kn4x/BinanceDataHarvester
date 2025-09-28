@@ -1,8 +1,8 @@
 import os, argparse, typing
 from pydantic import BaseModel
 from dotenv import dotenv_values
-from lib.utils.binance import Binance
-from lib.Types import t_market, t_log_level, t_interval, t_spot_interval, t_cm_interval, t_um_interval
+from lib.utility import *
+from lib.Types import *
 
 
 class EnvConfiguration(BaseModel):
