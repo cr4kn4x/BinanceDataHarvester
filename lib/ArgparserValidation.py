@@ -1,24 +1,27 @@
 import os, argparse, typing
 from pydantic import BaseModel
 from dotenv import dotenv_values
-from lib.utils import get_all_symbols
-from lib.Types import BINANCE_MARKET, LOG_LEVEL, SPOT_INTERVALL, FUTURES_CM_INTERVALL, FUTURES_UM_INTERVALL
+from lib.utils.binance import Binance
+from lib.Types import BINANCE_MARKET, LOG_LEVEL, INTERVAL, SPOT_INTERVALL, FUTURES_CM_INTERVALL, FUTURES_UM_INTERVALL
 
 
 class EnvConfiguration(BaseModel):
     MONGO_URI: str
-    SPOT_KLINE_DB: str
-    UM_KLINE_DB: str
-    CM_KLINE_DB: str
+
+    binance_spot_klines_db: str
+    binance_um_klines_db: str
+    binance_cm_klines_db: str
+
     BASE_DIR: str
 
 
 class Configuration(BaseModel): 
     env_config: EnvConfiguration
 
+    
     symbols: typing.List[str]
-    market: BINANCE_MARKET
-    interval: typing.Union[SPOT_INTERVALL, FUTURES_CM_INTERVALL, FUTURES_UM_INTERVALL]
+    market: str
+    interval: str
 
     log_level: LOG_LEVEL
     use_zip_cache: bool
@@ -55,35 +58,42 @@ def check_symbols(symbols: typing.List[str], market: BINANCE_MARKET) -> typing.L
     if symbols == None:
         return []
 
-    binance_symbols = get_all_symbols(market=market)
+    symbols = Binance.get_all_symbols(market=market)
 
-    invalid = [symbol for symbol in symbols if symbol not in binance_symbols]
+    invalid = [symbol for symbol in symbols if symbol not in symbols]
     if invalid: 
-        raise argparse.ArgumentTypeError(f"the following {market}-symbols cannot be found on binance: {', '.join(invalid)}")
-
+        raise argparse.ArgumentTypeError(f"invalid symbols found: {', '.join(invalid)}")
     return symbols
 
 
-def check_market_compatibility(market: BINANCE_MARKET, interval: typing.Union[SPOT_INTERVALL, FUTURES_CM_INTERVALL, FUTURES_UM_INTERVALL]): 
+def check_market_compatibility(market: BINANCE_MARKET, interval: INTERVAL): 
     if market == "spot": 
         if interval not in typing.get_args(SPOT_INTERVALL): 
-            raise argparse.ArgumentTypeError(f"Invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(SPOT_INTERVALL))}")
+            raise argparse.ArgumentTypeError(f"invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(SPOT_INTERVALL))}")
     elif market == "cm":
         if interval not in typing.get_args(FUTURES_CM_INTERVALL):
-            raise argparse.ArgumentTypeError(f"Invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(FUTURES_CM_INTERVALL))}")
+            raise argparse.ArgumentTypeError(f"invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(FUTURES_CM_INTERVALL))}")
     elif market == "um": 
         if interval not in typing.get_args(FUTURES_UM_INTERVALL):
-            raise argparse.ArgumentTypeError(f"Invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(FUTURES_UM_INTERVALL))}")
-    else:
+            raise argparse.ArgumentTypeError(f"invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(FUTURES_UM_INTERVALL))}")
+    else: 
         raise argparse.ArgumentTypeError(f"invalid market type {market}. valid market types are {', '.join(typing.get_args(BINANCE_MARKET))}")
-
     return market
 
 
 def parse_args(argv = None) -> Configuration:
     parser = argparse.ArgumentParser(
-        description="Binance Data Harvester by cr4k4nx",
-        usage="python main.py --spot-symbols BTCUSDT, ETHUSDT --env-file ./.env --log-level info --use-zip-cache"
+        description="Binance Kline Data Harvester by cr4k4nx",
+        usage="python main.py -h"
+    )
+
+
+    parser.add_argument(
+        "--market",
+        required=True,
+        dest="market",
+        choices=["um", "cm", "spot", "futures"],
+        help="binance markets: [um, cm, spot]  kucoin markets: [spot, futures]"
     )
 
 
@@ -97,19 +107,10 @@ def parse_args(argv = None) -> Configuration:
 
 
     parser.add_argument(
-        "--market",
-        required=True,
-        dest="market",
-        choices=[o for o in typing.get_args(BINANCE_MARKET)]
-    )
-
-
-    parser.add_argument(
         "--interval",
         required=True,
         dest="interval",
-        choices=list(set(typing.get_args(SPOT_INTERVALL) + typing.get_args(FUTURES_UM_INTERVALL) + typing.get_args(FUTURES_CM_INTERVALL))),
-        help=f"the following intervals can be fetched depending on the selected market. || *spot*: {', '.join(typing.get_args(SPOT_INTERVALL))} || *um*: {', '.join(typing.get_args(FUTURES_UM_INTERVALL))} || *cm*: {', '.join(typing.get_args(FUTURES_CM_INTERVALL))}"
+        choices=list(typing.get_args(INTERVAL)),
     )
 
 
@@ -126,7 +127,7 @@ def parse_args(argv = None) -> Configuration:
         "--log-level", 
         dest="log_level",
         default="info",
-        choices=[list(typing.get_args(LOG_LEVEL))],
+        choices=list(typing.get_args(LOG_LEVEL)),
         help="*OPTIONAL* set a log level. `--log-level debug` provides verbose logging mainly suitable for debug purposes only.  `--log-level info` provides information about the current progress and actions. `--log-level warning` provides only messages that are related to occuring warnings and errors" 
     )
 
