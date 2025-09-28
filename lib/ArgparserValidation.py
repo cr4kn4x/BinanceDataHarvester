@@ -2,7 +2,7 @@ import os, argparse, typing
 from pydantic import BaseModel
 from dotenv import dotenv_values
 from lib.utils.binance import Binance
-from lib.Types import BINANCE_MARKET, LOG_LEVEL, INTERVAL, SPOT_INTERVALL, FUTURES_CM_INTERVALL, FUTURES_UM_INTERVALL
+from lib.Types import t_market, t_log_level, t_interval, t_spot_interval, t_cm_interval, t_um_interval
 
 
 class EnvConfiguration(BaseModel):
@@ -23,7 +23,7 @@ class Configuration(BaseModel):
     market: str
     interval: str
 
-    log_level: LOG_LEVEL
+    log_level: t_log_level
     use_zip_cache: bool
 
 
@@ -54,30 +54,30 @@ def check_env_config(path: str):
     return config
 
 
-def check_symbols(symbols: typing.List[str], market: BINANCE_MARKET) -> typing.List[str]:
+def check_symbols(symbols: typing.List[str], market: t_market) -> typing.List[str]:
     if symbols == None:
         return []
 
-    symbols = Binance.get_all_symbols(market=market)
+    binance_symbols = Binance.get_all_symbols(market=market)
 
-    invalid = [symbol for symbol in symbols if symbol not in symbols]
+    invalid = [symbol for symbol in symbols if symbol not in binance_symbols]
     if invalid: 
         raise argparse.ArgumentTypeError(f"invalid symbols found: {', '.join(invalid)}")
     return symbols
 
 
-def check_market_compatibility(market: BINANCE_MARKET, interval: INTERVAL): 
+def check_market_compatibility(market: t_market, interval: t_interval): 
     if market == "spot": 
-        if interval not in typing.get_args(SPOT_INTERVALL): 
-            raise argparse.ArgumentTypeError(f"invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(SPOT_INTERVALL))}")
+        if interval not in typing.get_args(t_spot_interval): 
+            raise argparse.ArgumentTypeError(f"invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(t_spot_interval))}")
     elif market == "cm":
-        if interval not in typing.get_args(FUTURES_CM_INTERVALL):
-            raise argparse.ArgumentTypeError(f"invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(FUTURES_CM_INTERVALL))}")
+        if interval not in typing.get_args(t_cm_interval):
+            raise argparse.ArgumentTypeError(f"invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(t_cm_interval))}")
     elif market == "um": 
-        if interval not in typing.get_args(FUTURES_UM_INTERVALL):
-            raise argparse.ArgumentTypeError(f"invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(FUTURES_UM_INTERVALL))}")
+        if interval not in typing.get_args(t_um_interval):
+            raise argparse.ArgumentTypeError(f"invalid interval for market type {market}. valid intervals are: {', '.join(typing.get_args(t_um_interval))}")
     else: 
-        raise argparse.ArgumentTypeError(f"invalid market type {market}. valid market types are {', '.join(typing.get_args(BINANCE_MARKET))}")
+        raise argparse.ArgumentTypeError(f"invalid market type {market}. valid market types are {', '.join(typing.get_args(t_market))}")
     return market
 
 
@@ -110,7 +110,7 @@ def parse_args(argv = None) -> Configuration:
         "--interval",
         required=True,
         dest="interval",
-        choices=list(typing.get_args(INTERVAL)),
+        choices=set(typing.get_args(t_spot_interval) + typing.get_args(t_um_interval) + typing.get_args(t_cm_interval)),
     )
 
 
@@ -127,7 +127,7 @@ def parse_args(argv = None) -> Configuration:
         "--log-level", 
         dest="log_level",
         default="info",
-        choices=list(typing.get_args(LOG_LEVEL)),
+        choices=list(typing.get_args(t_log_level)),
         help="*OPTIONAL* set a log level. `--log-level debug` provides verbose logging mainly suitable for debug purposes only.  `--log-level info` provides information about the current progress and actions. `--log-level warning` provides only messages that are related to occuring warnings and errors" 
     )
 

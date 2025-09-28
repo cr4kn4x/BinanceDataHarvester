@@ -1,5 +1,5 @@
 import typing, logging
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class OHLCV(BaseModel):
@@ -15,6 +15,7 @@ class OHLCV(BaseModel):
     taker_buy_base_asset_volume: float 
     taker_buy_quote_asset_volume: float 
     ignore: typing.Any
+
 
     @staticmethod
     def init(raw_data: typing.List): 
@@ -33,3 +34,12 @@ class OHLCV(BaseModel):
             taker_buy_quote_asset_volume = raw_data[10], 
             ignore = raw_data[11], 
         )
+    
+    
+    @staticmethod
+    def init_from_list(raw_data: typing.List[typing.List]):
+        logging.info(f"Parsing {len(raw_data)} klines...")
+        return [OHLCV.init(r) for r in raw_data]
+    
+
+
