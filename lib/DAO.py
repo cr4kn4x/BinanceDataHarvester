@@ -94,5 +94,8 @@ class DAO:
         
         if error:
             logging.warning("retry to insert data using the more error tolerant update and upsert logic...")
-            ops = [pymongo.UpdateOne({"open_time": k["open_time"]}, {"$set": k}, upsert=True) for k in klines]
+            ops = []
+            for k in klines:
+                k.pop("_id", None)
+                ops.append(pymongo.UpdateOne({"open_time": k["open_time"]}, {"$set": k}, upsert=True))
             return collection.bulk_write(ops, ordered=True)
